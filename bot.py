@@ -1,6 +1,10 @@
 # bot.py
 import asyncio
 import logging
+import os
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import BufferedInputFile
@@ -10,10 +14,8 @@ from data import load_data
 from patterns import find_levels, find_fvg
 from chart import draw_chart
 
-# Настройка логов
 logging.basicConfig(level=logging.INFO)
 
-# Инициализация бота
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
@@ -44,19 +46,25 @@ async def cmd_check(message: types.Message):
 
     msg = await message.answer(f"⏳ Анализирую {ticker} ({tf})...")
 
-    # Загружаем данные в отдельном потоке, чтобы не вешать бота
     df = await asyncio.to_thread(load_data, ticker, tf)
     
     if df is None or df.empty:
         await msg.edit_text(f"❌ Не удалось загрузить данные по тикеру {ticker}. Проверь правильность написания.")
         return
 
-    # Ищем паттерны
     levels = find_levels(df)
     fvgs = find_fvg(df)
 
-    # Формируем текстовый отчет
     report = f"📊 **{ticker}** ({tf})\n\n"
+    
+    # Анализ объема
+    if "Volume" in df.columns and len(df) > 0:
+        avg_volume = df["Volume"].tail(20).mean()
+        last_volume = df["Volume"].iloc[-1]
+        if last_volume > avg_volume * 1.5:
+            report += "📊 **Объем:** ВЫСОКИЙ (сильные игроки)\n\n"
+        else:
+            report += "📊 **Объем:** Средний/Низкий\n\n"
     
     if levels:
         report += "📍 **Найденные уровни:**\n"
@@ -70,7 +78,7 @@ async def cmd_check(message: types.Message):
     
     if fvgs:
         report += "⚡ **Имбалансы (FVG):**\n"
-        for fvg in fvgs[:3]: # Показываем топ-3
+        for fvg in fvgs[:3]:
             type_ru = "Бычий" if fvg['type'] == 'bullish' else "Медвежий"
             report += f"• {type_ru}: {fvg['low']} - {fvg['high']} (до цены: {fvg['distance_pct']}%)\n"
     else:
@@ -78,7 +86,6 @@ async def cmd_check(message: types.Message):
 
     await msg.edit_text(report, parse_mode="Markdown")
 
-    # Рисуем график
     try:
         chart_buf = await asyncio.to_thread(draw_chart, df, ticker, tf, levels, fvgs)
         photo = BufferedInputFile(chart_buf.read(), filename=f"{ticker}_{tf}.png")
@@ -86,15 +93,7 @@ async def cmd_check(message: types.Message):
     except Exception as e:
         await message.answer(f"⚠️ Не удалось нарисовать график: {e}")
 
-async def main():
-    print("Бот запущен!")
-    await dp.start_polling(bot)
-
 # --- Мини-сервер для бесплатного хостинга ---
-import os
-from http.server import BaseHTTPRequestHandler, HTTPServer
-import threading
-
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -106,7 +105,10 @@ def run_fake_server():
     server = HTTPServer(("0.0.0.0", port), SimpleHandler)
     server.serve_forever()
 
-# --- Запуск бота и сервера ---
+async def main():
+    print("Бот запущен!")
+    await dp.start_polling(bot)
+
 if __name__ == "__main__":
     threading.Thread(target=run_fake_server, daemon=True).start()
     asyncio.run(main())
