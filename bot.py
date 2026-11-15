@@ -90,5 +90,23 @@ async def main():
     print("Бот запущен!")
     await dp.start_polling(bot)
 
+# --- Мини-сервер для бесплатного хостинга ---
+import os
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
+
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running!")
+
+def run_fake_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+    server.serve_forever()
+
+# --- Запуск бота и сервера ---
 if __name__ == "__main__":
+    threading.Thread(target=run_fake_server, daemon=True).start()
     asyncio.run(main())
