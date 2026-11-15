@@ -1,7 +1,7 @@
 # config.py
 
 # Telegram
-BOT_TOKEN = "ВСТАВЬ_СВОЙ_ТОКЕН_СЮДА"  # получить у @BotFather
+BOT_TOKEN = "9216991449:AAHjhFBUTWUEh9V4J1y0_K-rjnNTjT-VlyQ"  # получить у @BotFather
 
 # Доступные таймфреймы yfinance
 TIMEFRAMES = {
