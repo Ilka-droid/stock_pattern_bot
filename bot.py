@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+import gc
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
 
@@ -86,10 +87,12 @@ async def cmd_check(message: types.Message):
 
     await msg.edit_text(report, parse_mode="Markdown")
 
+    # --- Рисуем график и отправляем ---
     try:
         chart_buf = await asyncio.to_thread(draw_chart, df, ticker, tf, levels, fvgs)
         photo = BufferedInputFile(chart_buf.read(), filename=f"{ticker}_{tf}.png")
         await message.answer_photo(photo, caption=f"График {ticker} ({tf})")
+        gc.collect() # Очищаем память после отправки, чтобы сервер не зависал
     except Exception as e:
         await message.answer(f"⚠️ Не удалось нарисовать график: {e}")
 
