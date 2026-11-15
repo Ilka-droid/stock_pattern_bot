@@ -1,36 +1,50 @@
 # data.py
-import yfinance as yf
 import pandas as pd
+from tvDatafeed import TvDatafeed, Interval
 from config import TIMEFRAMES
 
+# Настройка интервалов TradingView
+TV_INTERVALS = {
+    "1m": Interval.in_1_minute,
+    "5m": Interval.in_5_minute,
+    "15m": Interval.in_15_minute,
+    "30m": Interval.in_30_minute,
+    "1h": Interval.in_1_hour,
+    "1d": Interval.in_daily,
+    "1wk": Interval.in_weekly,
+}
+
+# Российские тикеры
+RU_TICKERS = {"SBER", "GAZP", "LKOH", "ROSN", "YNDX", "TCSG", "NVTK", "MTLR", "PLZL", "GMKN", "ALRS", "MGNT"}
+
 def normalize_ticker(ticker: str) -> str:
-    """Приводит тикер к формату yfinance."""
-    t = ticker.strip().upper()
-    ru_tickers = {"SBER", "GAZP", "LKOH", "ROSN", "YNDX", "TCSG",
-                  "NVTK", "MTLR", "PLZL", "GMKN", "ALRS", "MGNT"}
-    if t in ru_tickers and not t.endswith(".ME"):
-        return t + ".ME"
-    return t
+    return ticker.strip().upper()
 
 def load_data(ticker: str, tf: str = "1d") -> pd.DataFrame | None:
-    """Загружает OHLC-данные. Возвращает DataFrame или None."""
     if tf not in TIMEFRAMES:
         return None
-    cfg = TIMEFRAMES[tf]
+    
     t = normalize_ticker(ticker)
+    interval = TV_INTERVALS[tf]
+    
+    # Определяем биржу
+    if t in RU_TICKERS:
+        exchange = "MOEX"
+    else:
+        exchange = "NASDAQ"  # или NYSE, TradingView сам подтянет
+        
     try:
-        df = yf.download(
-            t,
-            interval=cfg["interval"],
-            period=cfg["period"],
-            progress=False,
-            auto_adjust=True,
-        )
+        # Анонимный вход в TradingView
+        tv = TvDatafeed()
+        # Загружаем данные
+        df = tv.get_hist(symbol=t, exchange=exchange, interval=interval, n_bars=500)
+        
         if df is None or df.empty:
             return None
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        df = df[["Open", "High", "Low", "Close"]].dropna()
+            
+        # Переименовываем колонки для удобства
+        df = df.rename(columns={"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"})
         return df
-    except Exception:
+    except Exception as e:
+        print(f"Ошибка загрузки данных: {e}")
         return None
